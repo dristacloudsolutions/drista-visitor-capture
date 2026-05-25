@@ -21,9 +21,9 @@ export default function AdminLoginPage({ params }: { params: Promise<{ shortCode
 
     try {
       const response = await eventService.adminLogin({ email, password });
-      if (response.success && response.token) {
+      if (response.success && response.data?.access_token) {
         // Save the JWT token
-        localStorage.setItem('drista_admin_token', response.token);
+        localStorage.setItem('drista_admin_token', response.data.access_token);
         
         // Redirect to Dashboard
         router.push(`/${resolvedParams.shortCode}/dashboard`);

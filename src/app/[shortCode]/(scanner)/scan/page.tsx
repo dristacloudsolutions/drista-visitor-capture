@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Webcam from 'react-webcam';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, RefreshCw, Check, Loader2, X, UploadCloud, Edit3, ArrowRight, Settings, ArrowLeft, CheckCircle2, Circle, CircleDot } from 'lucide-react';
@@ -12,7 +13,9 @@ const MOCK_EXTRACTED_DATA = {
   company: 'Drista Cloud Solutions',
   designation: 'CEO',
   email: 'mukesh@drista.cloud',
-  phone: '+91 9876543210'
+  phone: '+91 9876543210',
+  website: 'www.drista.cloud',
+  address: 'Mumbai, Maharashtra'
 };
 
 export default function ScanPage({ params }: { params: Promise<{ shortCode: string }> }) {
@@ -22,21 +25,27 @@ export default function ScanPage({ params }: { params: Promise<{ shortCode: stri
   
   const [step, setStep] = useState<'permission' | 'camera' | 'uploading' | 'form'>('permission');
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [scanId, setScanId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     company: '',
     designation: '',
     email: '',
     phone: '',
+    website: '',
+    address: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cameraError, setCameraError] = useState(false);
+  const [eventDetails, setEventDetails] = useState<any>(null);
+  const [fieldScores, setFieldScores] = useState<Record<string, number> | null>(null);
 
   // If SAMPLE24 is entered, we'll mock the extraction to avoid hitting the actual AI while testing
   const isSample = resolvedParams.shortCode.toUpperCase() === 'SAMPLE24';
 
   useEffect(() => {
-    async function checkCameraPermission() {
+    async function init() {
+      // 1. Check camera permission
       try {
         const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
         if (result.state === 'granted') {
@@ -48,9 +57,28 @@ export default function ScanPage({ params }: { params: Promise<{ shortCode: stri
           setStep('camera');
         }
       }
+
+      // 2. Fetch event details
+      try {
+        if (!isSample) {
+          const response = await eventService.verifyEventCode(resolvedParams.shortCode);
+          if (response.success) {
+            setEventDetails(response.data);
+          }
+        } else {
+          setEventDetails({
+            title: 'Demo Networking Event',
+            project: { name: 'Drista Community Drive' },
+            created_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 86400000 * 7).toISOString()
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching event details:', error);
+      }
     }
-    checkCameraPermission();
-  }, []);
+    init();
+  }, [resolvedParams.shortCode, isSample]);
 
   const capture = useCallback(() => {
     if (webcamRef.current) {
@@ -70,6 +98,16 @@ export default function ScanPage({ params }: { params: Promise<{ shortCode: stri
         // Simulate network delay and AI OCR
         await new Promise(r => setTimeout(r, 2000));
         setFormData(MOCK_EXTRACTED_DATA);
+        // Mock scores for demo
+        setFieldScores({
+          name: 98,
+          company: 95,
+          designation: 87,
+          email: 92,
+          phone: 79,
+          website: 83,
+          address: 61,
+        });
         setStep('form');
         return;
       }
@@ -82,13 +120,18 @@ export default function ScanPage({ params }: { params: Promise<{ shortCode: stri
       const response = await eventService.scanCard(resolvedParams.shortCode, blob);
       
       if (response.success && response.data) {
+        const { scan_id, extracted, field_scores } = response.data;
+        setScanId(scan_id);
         setFormData({
-          name: response.data.name || '',
-          company: response.data.company || '',
-          designation: response.data.designation || '',
-          email: response.data.email || '',
-          phone: response.data.phone || '',
+          name: extracted?.name || '',
+          company: extracted?.company || '',
+          designation: extracted?.designation || '',
+          email: extracted?.email || '',
+          phone: extracted?.phone || '',
+          website: extracted?.website || '',
+          address: extracted?.address || '',
         });
+        setFieldScores(field_scores || null);
         setStep('form');
       } else {
         alert('Failed to extract data. Please try again or fill manually.');
@@ -103,6 +146,8 @@ export default function ScanPage({ params }: { params: Promise<{ shortCode: stri
 
   const handleRetake = () => {
     setImageSrc(null);
+    setScanId(null);
+    setFieldScores(null);
     setStep('camera');
   };
 
@@ -110,14 +155,46 @@ export default function ScanPage({ params }: { params: Promise<{ shortCode: stri
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      let registrationId = '';
+      let checkInUrl = '';
       if (isSample) {
         await new Promise(r => setTimeout(r, 1000));
+        registrationId = 'sample-registration-id';
+        checkInUrl = '';
+      } else if (scanId) {
+        // Submit using confirmCard since we scanned a card
+        const res = await eventService.confirmCard(resolvedParams.shortCode, {
+          scan_id: scanId,
+          name: formData.name,
+          phone: formData.phone || undefined,
+          email: formData.email || undefined,
+          company: formData.company || undefined,
+          designation: formData.designation || undefined,
+          website: formData.website || undefined,
+          address: formData.address || undefined,
+        });
+        registrationId = res.data?.registration_id;
+        checkInUrl = res.data?.check_in_url || '';
       } else {
-        await eventService.confirmCard(resolvedParams.shortCode, formData);
+        // Plain registration API fallback (manual entry flow)
+        const res = await eventService.register(resolvedParams.shortCode, {
+          name: formData.name,
+          phone: formData.phone || undefined,
+          email: formData.email || undefined,
+          custom_data: {
+            company: formData.company || undefined,
+            designation: formData.designation || undefined,
+            website: formData.website || undefined,
+            address: formData.address || undefined,
+          }
+        });
+        registrationId = res.data?.id;
+        checkInUrl = res.data?.check_in_url || '';
       }
+
       // Save locally to display in history later
       const history = JSON.parse(localStorage.getItem('visitor_history') || '[]');
-      history.unshift({ ...formData, timestamp: new Date().toISOString() });
+      history.unshift({ ...formData, registrationId, checkInUrl, timestamp: new Date().toISOString() });
       localStorage.setItem('visitor_history', JSON.stringify(history.slice(0, 10)));
       
       router.push(`/${resolvedParams.shortCode}/success`);
@@ -133,6 +210,32 @@ export default function ScanPage({ params }: { params: Promise<{ shortCode: stri
 
   return (
     <div className="w-full h-full flex flex-col bg-background">
+      {/* Event Details Banner */}
+      {eventDetails && (
+        <div className="bg-white border-b border-zinc-100 p-4 flex flex-col gap-1 shadow-sm relative z-30">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-black text-slate-900 tracking-tight">{eventDetails.title}</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 bg-primary/10 text-primary rounded-full">
+                {eventDetails.project?.name || 'Event'}
+              </span>
+              <Link 
+                href={`/${resolvedParams.shortCode}/dashboard`} 
+                className="text-[10px] font-extrabold uppercase px-2.5 py-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 hover:text-zinc-800 rounded-full transition-colors flex items-center gap-1 border border-zinc-200/50"
+              >
+                Dashboard
+              </Link>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-0.5">
+            <span>Created: {new Date(eventDetails.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            {eventDetails.expires_at && (
+              <span>Expires: {new Date(eventDetails.expires_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            )}
+          </div>
+        </div>
+      )}
+
       <AnimatePresence mode="wait">
         {step === 'permission' && (
           <motion.div
@@ -329,22 +432,60 @@ export default function ScanPage({ params }: { params: Promise<{ shortCode: stri
                 { name: 'phone', label: 'Phone Number', type: 'tel', placeholder: '+91 ...', required: false },
                 { name: 'company', label: 'Company Name', type: 'text', placeholder: 'Acme Corp', required: false },
                 { name: 'designation', label: 'Designation / Job Title', type: 'text', placeholder: 'Director', required: false },
-              ].map((field) => (
-                <div key={field.name} className="bg-white p-3 rounded-2xl border border-zinc-100 shadow-sm">
-                  <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1 ml-1">
-                    {field.label} {field.required && '*'}
-                  </label>
-                  <input
-                    type={field.type}
-                    name={field.name}
-                    required={field.required}
-                    value={formData[field.name as keyof typeof formData]}
-                    onChange={handleChange}
-                    placeholder={field.placeholder}
-                    className="w-full px-3 py-2 bg-transparent text-foreground font-bold outline-none placeholder:text-zinc-300 placeholder:font-medium"
-                  />
-                </div>
-              ))}
+                { name: 'website', label: 'Website URL', type: 'text', placeholder: 'www.example.com', required: false },
+                { name: 'address', label: 'Address', type: 'text', placeholder: 'Street details...', required: false },
+              ].map((field) => {
+                const score = fieldScores ? (fieldScores[field.name] ?? null) : null;
+                const scoreColor =
+                  score === null ? null
+                  : score >= 80  ? { text: 'text-emerald-600', bg: 'bg-emerald-500', pill: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+                  : score >= 50  ? { text: 'text-amber-600',   bg: 'bg-amber-400',   pill: 'bg-amber-50 text-amber-700 border-amber-200' }
+                  :                { text: 'text-red-500',     bg: 'bg-red-400',     pill: 'bg-red-50 text-red-600 border-red-200' };
+                const scoreLabel =
+                  score === null ? null
+                  : score >= 80  ? 'High'
+                  : score >= 50  ? 'Medium'
+                  :                'Low';
+
+                return (
+                  <div key={field.name} className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
+                    {/* Field header row */}
+                    <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                        {field.label} {field.required && <span className="text-primary">*</span>}
+                      </label>
+                      {score !== null && scoreColor && (
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full border ${scoreColor.pill}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${scoreColor.bg}`} />
+                          {scoreLabel} · {score}%
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Confidence progress bar */}
+                    {score !== null && scoreColor && (
+                      <div className="mx-4 h-0.5 bg-zinc-100 rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${score}%` }}
+                          transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }}
+                          className={`h-full ${scoreColor.bg} rounded-full`}
+                        />
+                      </div>
+                    )}
+
+                    <input
+                      type={field.type}
+                      name={field.name}
+                      required={field.required}
+                      value={formData[field.name as keyof typeof formData]}
+                      onChange={handleChange}
+                      placeholder={field.placeholder}
+                      className="w-full px-4 py-2.5 bg-transparent text-foreground font-bold outline-none placeholder:text-zinc-300 placeholder:font-medium"
+                    />
+                  </div>
+                );
+              })}
 
               {imageSrc && (
                  <button type="button" onClick={handleRetake} className="w-full flex items-center justify-center gap-2 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-200 rounded-xl transition-colors mt-2">

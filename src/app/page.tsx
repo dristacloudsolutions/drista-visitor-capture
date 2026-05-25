@@ -4,22 +4,35 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ScanLine, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { eventService } from '@/lib/api';
 
 export default function Home() {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const handleJoin = (e: React.FormEvent) => {
+  const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim()) return;
     
     setLoading(true);
-    // Simulate API delay for verifying the code
-    setTimeout(() => {
-      // Navigate to the scanning portal for this shortCode
-      router.push(`/${code.toLowerCase()}/scan`);
-    }, 600);
+    setError(null);
+    try {
+      // Real API verification of the event code - case preserved
+      const response = await eventService.verifyEventCode(code.trim());
+      if (response.success) {
+        // Navigate to the scanning portal for this shortCode - case preserved
+        router.push(`/${code.trim()}/scan`);
+      } else {
+        setError(response.message || 'Invalid event code.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.response?.data?.message || 'Invalid event code. Please check and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -55,6 +68,12 @@ export default function Home() {
               />
             </div>
             
+            {error && (
+              <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center">
+                {error}
+              </p>
+            )}
+            
             <button
               type="submit"
               disabled={loading || !code.trim()}
@@ -69,13 +88,26 @@ export default function Home() {
               )}
             </button>
             
-            <div className="pt-2 text-center">
+            <div className="pt-2 text-center flex flex-col gap-2">
               <button 
                 type="button" 
                 onClick={() => setCode('SAMPLE24')}
                 className="text-xs font-bold text-zinc-400 hover:text-primary transition-colors underline underline-offset-4"
               >
                 Use Demo Event (SAMPLE24)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!code.trim()) {
+                    setError('Please enter your event code first');
+                    return;
+                  }
+                  router.push(`/${code.trim()}/dashboard`);
+                }}
+                className="text-xs font-bold text-zinc-400 hover:text-primary transition-colors underline underline-offset-4"
+              >
+                Go to Admin Dashboard
               </button>
             </div>
           </div>

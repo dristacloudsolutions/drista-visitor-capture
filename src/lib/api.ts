@@ -21,12 +21,10 @@ apiClient.interceptors.request.use((config) => {
 });
 
 export const eventService = {
-    // We will verify the event code first
+    // Verify if the event code exists and is active on the backend
     verifyEventCode: async (shortCode: string) => {
-        // Here we could hit a public endpoint to verify if the event code exists
-        // E.g. GET /public/events/:shortCode
-        // For now, we will just simulate success if they hit 'confirm' in the UI
-        return { success: true, shortCode };
+        const response = await apiClient.get(`/public/events/register/${shortCode}`);
+        return response.data;
     },
     
     // Upload image to scan card
@@ -47,8 +45,40 @@ export const eventService = {
         return response.data;
     },
 
-    getDashboardMetrics: async (shortCode: string) => {
-        const response = await apiClient.get(`/public/events/register/${shortCode}/dashboard`);
+    // Plain registration (manual entry fallback)
+    register: async (shortCode: string, payload: any) => {
+        const response = await apiClient.post(`/public/events/register/${shortCode}`, payload);
+        return response.data;
+    },
+
+    getDashboardMetrics: async (shortCode: string, date?: string) => {
+        const params: any = {};
+        if (date) params.date = date;
+        const response = await apiClient.get(`/public/events/register/${shortCode}/dashboard`, { params });
+        return response.data;
+    },
+    
+    getVisitors: async (shortCode: string, search?: string, page?: number, limit?: number) => {
+        const params: any = {};
+        if (search) params.search = search;
+        if (page) params.page = page;
+        if (limit) params.limit = limit;
+        const response = await apiClient.get(`/public/events/register/${shortCode}/visitors`, { params });
+        return response.data;
+    },
+
+    getVolunteers: async (shortCode: string) => {
+        const response = await apiClient.get(`/public/events/register/${shortCode}/volunteers`);
+        return response.data;
+    },
+
+    getAnalytics: async (shortCode: string) => {
+        const response = await apiClient.get(`/public/events/register/${shortCode}/analytics`);
+        return response.data;
+    },
+
+    toggleCheckIn: async (registrationId: string) => {
+        const response = await apiClient.patch(`/public/events/registrations/${registrationId}/check-in`);
         return response.data;
     },
 

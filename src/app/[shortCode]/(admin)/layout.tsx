@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { LayoutDashboard, Users, UserSquare2, BarChart2, Download, Settings, User } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 export default function AdminLayout({
   children,
@@ -14,6 +14,7 @@ export default function AdminLayout({
 }) {
   const { shortCode } = React.use(params);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const token = localStorage.getItem('drista_admin_token');
@@ -24,12 +25,12 @@ export default function AdminLayout({
 
   // Navigation Items
   const navItems = [
-    { name: 'Dashboard', icon: LayoutDashboard, href: `/${shortCode}/dashboard`, active: true },
-    { name: 'Visitors', icon: Users, href: `/${shortCode}/visitors` },
-    { name: 'Volunteers', icon: UserSquare2, href: `/${shortCode}/volunteers` },
-    { name: 'Analytics', icon: BarChart2, href: `/${shortCode}/analytics` },
-    { name: 'Export Data', icon: Download, href: `/${shortCode}/export` },
-    { name: 'Settings', icon: Settings, href: `/${shortCode}/settings` },
+    { name: 'Dashboard', icon: LayoutDashboard, href: `/${shortCode}/dashboard`, active: pathname === `/${shortCode}/dashboard` },
+    { name: 'Visitors', icon: Users, href: `/${shortCode}/visitors`, active: pathname === `/${shortCode}/visitors` },
+    { name: 'Volunteers', icon: UserSquare2, href: `/${shortCode}/volunteers`, active: pathname === `/${shortCode}/volunteers` },
+    { name: 'Analytics', icon: BarChart2, href: `/${shortCode}/analytics`, active: pathname === `/${shortCode}/analytics` },
+    { name: 'Export Data', icon: Download, href: `/${shortCode}/export`, active: pathname === `/${shortCode}/export` },
+    { name: 'Settings', icon: Settings, href: `/${shortCode}/settings`, active: pathname === `/${shortCode}/settings` },
   ];
 
   return (

@@ -111,7 +111,7 @@ export default function DashboardPage({ params }: { params: Promise<{ shortCode:
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {recentVisitors.map((v, i) => (
+                {recentVisitors.map((v: any, i: number) => (
                   <tr key={i} className="hover:bg-zinc-50/50 transition-colors">
                     <td className="px-6 py-4 font-bold text-[#e52b36] whitespace-nowrap">{v.name}</td>
                     <td className="px-6 py-4 text-sm font-medium text-slate-600 truncate max-w-[200px]">{v.company}</td>
@@ -132,7 +132,7 @@ export default function DashboardPage({ params }: { params: Promise<{ shortCode:
           </div>
           
           <div className="flex-1 p-2">
-            {volunteerActivity.map((v, i) => (
+            {volunteerActivity.map((v: any, i: number) => (
               <div key={i} className="flex items-center gap-4 p-4 rounded-xl hover:bg-zinc-50 transition-colors">
                 <img src={v.avatar} alt={v.name} className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" />
                 <div className="flex-1">
